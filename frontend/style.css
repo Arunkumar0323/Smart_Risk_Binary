@@ -1,0 +1,14 @@
+body {
+  background-color: #f4f6f9;
+}
+
+.stat-card {
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.card {
+  border-radius: 12px;
+}

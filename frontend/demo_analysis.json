@@ -1,0 +1,149 @@
+{
+  "filename": "unknown_payload.exe",
+  "binaryId": "analysis_20260306_007",
+  "sha256": "9c7d2a1c7e7a6e7d4c5b4a2f3e1d0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3",
+  "md5": "d41d8cd98f00b204e9800998ecf8427e",
+  "entropy": 7.62,
+  "fileSize": 3145728,
+  "timestamp": "2026-03-06T12:15:10Z",
+  "trustScore": 0.31,
+  "riskLevel": "High",
+
+  "alerts": [
+    {
+      "severity": "Critical",
+      "message": "Packed executable detected with abnormal entropy"
+    },
+    {
+      "severity": "High",
+      "message": "Suspicious PowerShell execution detected"
+    },
+    {
+      "severity": "High",
+      "message": "Persistence mechanism using registry Run key"
+    },
+    {
+      "severity": "Medium",
+      "message": "Outbound network connection to suspicious external host"
+    },
+    {
+      "severity": "Medium",
+      "message": "Executable lacks valid digital signature"
+    }
+  ],
+
+  "yara": {
+    "rules": [
+      "Trojan.Generic.Detection",
+      "Suspicious.Network.Activity",
+      "Malware.Obfuscated.Code"
+    ],
+    "matches": 3,
+    "signatures": [
+      {
+        "name": "EncodedPowerShellCommand",
+        "confidence": 0.91,
+        "description": "Encoded PowerShell command execution detected"
+      },
+      {
+        "name": "SuspiciousNetworkBeacon",
+        "confidence": 0.87,
+        "description": "Possible command-and-control beacon behavior"
+      },
+      {
+        "name": "PackedExecutable",
+        "confidence": 0.93,
+        "description": "Executable appears packed or obfuscated"
+      }
+    ]
+  },
+
+  "analysis": {
+    "static_analysis": {
+      "imports": [
+        "kernel32.dll",
+        "user32.dll",
+        "advapi32.dll",
+        "ws2_32.dll",
+        "wininet.dll"
+      ],
+      "strings": [
+        "cmd.exe",
+        "powershell.exe",
+        "CreateRemoteThread",
+        "OpenProcess",
+        "VirtualAllocEx",
+        "DownloadFile"
+      ],
+      "packed": true,
+      "packing_entropy": 7.62
+    },
+
+    "behavioral_analysis": {
+      "network_connections": [
+        {
+          "ip": "185.199.110.153",
+          "port": 443,
+          "protocol": "HTTPS"
+        },
+        {
+          "ip": "45.77.89.101",
+          "port": 8080,
+          "protocol": "HTTP"
+        }
+      ],
+
+      "registry_access": [
+        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce"
+      ],
+
+      "file_operations": [
+        "C:\\Users\\*\\Documents\\*.docx",
+        "C:\\Users\\*\\Desktop\\*.pdf",
+        "C:\\Temp\\payload.tmp"
+      ],
+
+      "processes_created": [
+        "cmd.exe /c whoami",
+        "powershell.exe -enc aW52b2tlLXdlYnJlcXVlc3Q=",
+        "schtasks.exe /create /sc minute"
+      ]
+    },
+
+    "ml_score": {
+      "malware_probability": 0.91,
+      "trojan_probability": 0.84,
+      "ransomware_probability": 0.63
+    }
+  },
+
+  "severity_indicators": {
+    "entropy_risk": "HIGH",
+    "signature_matches": "HIGH",
+    "behavioral_risk": "HIGH",
+    "network_risk": "MEDIUM",
+    "code_obfuscation": "YES",
+    "anti_analysis": "YES",
+    "persistence_mechanism": "YES"
+  },
+
+  "recommendations": {
+    "immediate_action": "QUARANTINE FILE IMMEDIATELY",
+    "deployment": "NOT SAFE",
+    "quarantine": "YES",
+    "analysis_type": "DEEP SANDBOX ANALYSIS REQUIRED",
+    "threat_level": "HIGH"
+  },
+
+  "cuckoo_malscore": 7.8,
+  "virustotal_detections": "38/70",
+
+  "detectionDetails": [
+    "Kaspersky: HEUR:Trojan.Win32.Generic",
+    "BitDefender: Trojan.GenericKD",
+    "Avast: Win32:Malware-gen",
+    "ESET: Win32/Suspicious.AH",
+    "Microsoft Defender: Trojan:Win32/Wacatac"
+  ]
+}

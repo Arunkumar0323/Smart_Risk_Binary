@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Risk-Scoring Dashboard - SOC/DFIR</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            transition: background-color 0.3s, color 0.3s; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            position: relative; 
+            overflow-x: hidden; 
+        }
+        .dark-mode { 
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); 
+            color: #ecf0f1; 
+        }
+        /* Updated Glassmorphism for Better Contrast */
+        .glass-card { 
+            background: rgba(255, 255, 255, 0.15); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255, 255, 255, 0.3); 
+            border-radius: 15px; 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); 
+            transition: transform 0.3s, box-shadow 0.3s; 
+        }
+        .glass-card:hover { 
+            transform: translateY(-5px) scale(1.02); 
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2); 
+        }
+        .dark-mode .glass-card { 
+            background: rgba(52, 73, 94, 0.4); 
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+        }
+        /* Enhanced Heading Visibility */
+        .card-header {
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); 
+            color: #ffffff !important; 
+            font-weight: bold;
+        }
+        .dark-mode .card-header {
+            text-shadow: 0 1px 3px rgba(255, 255, 255, 0.3); 
+        }
+        /* Ensure other text elements are readable */
+        .card-body p, .card-body li {
+            color: rgba(0, 0, 0, 0.8);
+        }
+        .dark-mode .card-body p, .dark-mode .card-body li {
+            color: rgba(255, 255, 255, 0.9);
+        }
+        /* Particle Background */
+        .particles { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            pointer-events: none; 
+            z-index: -1; 
+        }
+        .particle { 
+            position: absolute; 
+            background: rgba(255, 255, 255, 0.5); 
+            border-radius: 50%; 
+            animation: float 6s infinite ease-in-out; 
+        }
+        @keyframes float { 
+            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.5; } 
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 1; } 
+        }
+        /* Animated Counters */
+        .stat-counter { 
+            font-size: 2rem; 
+            font-weight: bold; 
+            color: #3498db; 
+            transition: color 0.3s; 
+        }
+        .dark-mode .stat-counter { color: #ecf0f1; }
+        /* Ripple Effect */
+        .ripple { 
+            position: relative; 
+            overflow: hidden; 
+        }
+        .ripple::before { 
+            content: ''; 
+            position: absolute; 
+            top: 50%; left: 50%; 
+            width: 0; height: 0; 
+            border-radius: 50%; 
+            background: rgba(255, 255, 255, 0.5); 
+            transform: translate(-50%, -50%); 
+            transition: width 0.6s, height 0.6s; 
+        }
+        .ripple:active::before { 
+            width: 300px; height: 300px; 
+        }
+        /* Typing Animation for Alerts */
+        .typing { 
+            border-right: 2px solid #3498db; 
+            animation: blink 1s infinite; 
+        }
+        @keyframes blink { 0%, 50% { border-color: transparent; } 51%, 100% { border-color: #3498db; } }
+        /* Glowing Alerts */
+        .alert-item.glow { 
+            box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); 
+            animation: glowPulse 2s infinite; 
+        }
+        @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 10px rgba(255, 193, 7, 0.5); } 50% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.8); } }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tooltip-inner { background-color: #000; }
+        .loading { display: none; color: #3498db; }
+        .dark-mode .loading { color: #ecf0f1; }
+        .chart-container-fixed {
+            position: relative;
+            height: 240px;
+            width: 100%;
+        }
+        .chart-container-fixed canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+    </style>
+</head>
+<body class="container-fluid p-3 fade-in">
+    <!-- Particle Background -->
+    <div class="particles" id="particles"></div>
+
+    <header class="d-flex justify-content-between align-items-center mb-4 glass-card p-3">
+        <h1 style="color: #00FFFF;"><i class="fas fa-shield-alt"></i> Smart Risk-Scoring Dashboard</h1>
+        <div>
+            <div id="liveClock" class="text-light mb-2" style="font-size: 1.2rem; font-weight: bold;"></div>
+            <span class="badge bg-success"><i class="fas fa-check-circle"></i> All Systems Operational</span>
+            <button id="darkModeToggle" class="btn btn-outline-secondary ms-2 ripple" data-bs-toggle="tooltip" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
+        </div>
+    </header>
+
+    <!-- Report Upload Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card glass-card">
+                <div class="card-header bg-info text-white"><i class="fas fa-upload"></i> Upload & Analyze Report</div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <input type="file" class="form-control" id="reportFileInput" accept=".json" placeholder="Select report.json file">
+                                <button class="btn btn-primary ripple" id="uploadBtn" onclick="uploadReport()">
+                                    <i class="fas fa-cloud-upload-alt"></i> Upload & Analyze
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-2">Supported format: JSON report files</small>
+                            <small class="text-muted d-block" id="backendStatus">
+                                <i class="fas fa-spinner fa-spin"></i> Checking backend connection...
+                            </small>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div id="uploadStatus" class="alert alert-info d-none" role="alert"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis Results Section (Hidden by default) -->
+    <div class="row mb-4" id="analysisResultsSection" style="display: none;">
+        <div class="col-12">
+            <div class="card glass-card">
+                <div class="card-header bg-success text-white"><i class="fas fa-check-circle"></i> Analysis Results</div>
+                <div class="card-body">
+                    <div id="analysisResultsContent">
+                        <!-- Results will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Section (Hidden by default) -->
+    <div class="row mb-4" id="chatSection" style="display: none;">
+        <div class="col-12">
+            <div class="card glass-card">
+                <div class="card-header bg-primary text-white"><i class="fas fa-comments"></i> AI Security Assistant - Ask Questions About This Binary</div>
+                <div class="card-body">
+                    <div style="height: 400px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.3); border-radius: 10px; padding: 15px; background: rgba(0,0,0,0.1); margin-bottom: 15px;" id="chatMessages">
+                        <div style="color: #ccc; font-size: 0.9rem;">Chat messages will appear here...</div>
+                    </div>
+                    
+                    <!-- Quick Questions -->
+                    <div class="mb-3">
+                        <p><strong>Quick Questions:</strong></p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <button class="btn btn-sm btn-outline-info ripple" onclick="quickQuestion('Why is this file suspicious?')"><i class="fas fa-question-circle"></i> Why suspicious?</button>
+                            <button class="btn btn-sm btn-outline-info ripple" onclick="quickQuestion('Does this show ransomware behavior?')"><i class="fas fa-lock"></i> Ransomware?</button>
+                            <button class="btn btn-sm btn-outline-info ripple" onclick="quickQuestion('Is it safe for enterprise deployment?')"><i class="fas fa-building"></i> Enterprise Safe?</button>
+                            <button class="btn btn-sm btn-outline-info ripple" onclick="quickQuestion('What is the severity?')"><i class="fas fa-exclamation-triangle"></i> Severity?</button>
+                            <button class="btn btn-sm btn-outline-info ripple" onclick="quickQuestion('Are there known malware signatures?')"><i class="fas fa-fingerprint"></i> Signatures?</button>
+                            <button class="btn btn-sm btn-outline-info ripple" onclick="quickQuestion('What does entropy tell us?')"><i class="fas fa-chart-line"></i> Entropy?</button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="chatInput" placeholder="Ask a question about this binary..." onkeypress="if(event.key==='Enter') chatAsk();">
+                        <button class="btn btn-primary ripple" id="chatSendBtn" onclick="chatAsk()"><i class="fas fa-paper-plane"></i> Send</button>
+                        <button class="btn btn-outline-secondary ripple" onclick="clearChatMessages()"><i class="fas fa-trash"></i> Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Row with Animated Counters -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card glass-card text-center">
+                <div class="card-body">
+                    <i class="fas fa-file-signature fa-2x text-success"></i>
+                    <h5>Signed Binaries</h5>
+                    <div class="stat-counter" id="signedCount" data-target="350">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card glass-card text-center">
+                <div class="card-body">
+                    <i class="fas fa-exclamation-triangle fa-2x text-warning"></i>
+                    <h5>Unsigned Binaries</h5>
+                    <div class="stat-counter" id="unsignedCount" data-target="150">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card glass-card text-center">
+                <div class="card-body">
+                    <i class="fas fa-clock fa-2x text-info"></i>
+                    <h5>Avg Response Time</h5>
+                    <div class="stat-counter" id="avgResponseValue">0ms</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card glass-card text-center">
+                <div class="card-body">
+                    <i class="fas fa-bell fa-2x text-danger"></i>
+                    <h5>Active Alerts</h5>
+                    <div class="stat-counter" id="alertCount" data-target="3">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Binary Status Overview -->
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card glass-card">
+                <div class="card-header bg-primary text-white"><i class="fas fa-chart-pie"></i> Binary Status Overview</div>
+                <div class="card-body">
+                    <div class="chart-container-fixed">
+                        <canvas id="binaryChart" data-bs-toggle="tooltip" title="Click segments for details"></canvas>
+                    </div>
+                    <p class="mt-2 text-muted">Signed: 70% (350) | Unsigned: 30% (150)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trust Score Visualization -->
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card glass-card">
+                <div class="card-header bg-success text-white"><i class="fas fa-chart-bar"></i> Trust Scores</div>
+                <div class="card-body">
+                    <div class="chart-container-fixed">
+                        <canvas id="trustChart" data-bs-toggle="tooltip" title="Hover for risk breakdown"></canvas>
+                    </div>
+                    <p class="mt-2 text-muted">Low Risk: 60% | High Risk: 40%</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historical Activity -->
+        <div class="col-lg-4 col-md-12 mb-4">
+            <div class="card glass-card">
+                <div class="card-header bg-info text-white"><i class="fas fa-chart-line"></i> Historical Activity (Last 7 Days)</div>
+                <div class="card-body">
+                    <div class="chart-container-fixed">
+                        <canvas id="historyChart" data-bs-toggle="tooltip" title="Track trends over time"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Alerts with Typing Animation -->
+        <div class="col-lg-6 mb-4">
+            <div class="card glass-card">
+                <div class="card-header d-flex justify-content-between bg-warning text-dark">
+                    <span><i class="fas fa-bell"></i> Recent Alerts</span>
+                    <div>
+                        <input type="text" id="alertSearch" class="form-control form-control-sm d-inline w-50 me-2" placeholder="Search alerts...">
+                        <select id="alertFilter" class="form-select form-select-sm d-inline w-25">
+                            <option value="">All Severities</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                        <button id="refreshAlerts" class="btn btn-sm btn-primary ms-2 ripple" data-bs-toggle="tooltip" title="Refresh Alerts"><i class="fas fa-sync"></i></button>
+                        <span id="loadingSpinner" class="loading ms-2"><i class="fas fa-spinner fa-spin"></i> Loading...</span>
+                    </div>
+                </div>
+                <div class="card-body" id="alertsList">
+                    <!-- Alerts populated by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Analytics -->
+        <div class="col-lg-6 mb-4">
+            <div class="card glass-card">
+                <div class="card-header bg-secondary text-white"><i class="fas fa-chart-area"></i> Summary Analytics</div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item"><strong>Mean Response Time:</strong> 5.2 minutes</li>
+                        <li class="list-group-item"><strong>Suspicious Binaries:</strong> 45% (flagged for malware)</li>
+                        <li class="list-group-item"><strong>Verified Binaries:</strong> 55% (auto-signed)</li>
+                    </ul>
+                    <div class="mt-3">
+                        <button class="btn btn-outline-primary me-2 ripple" onclick="exportReport('CSV')" data-bs-toggle="tooltip" title="Download as CSV"><i class="fas fa-download"></i> Export CSV</button>
+                        <button class="btn btn-outline-success ripple" onclick="exportReport('PDF')" data-bs-toggle="tooltip" title="Download as PDF"><i class="fas fa-file-pdf"></i> Export PDF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Modal for Alert Details -->
+    <div class="modal fade" id="alertModal" tabindex="-1" aria-labelledby="alertModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content glass-card">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="alertModalLabel"><i class="fas fa-info-circle"></i> Alert Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="alertDetails">
+                    <!-- Details populated on click -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary ripple" data-bs-dismiss="modal"><i class="fas fa-times"></i> Close</button>
+                    <button type="button" class="btn btn-primary ripple" onclick="takeAction('investigate')"><i class="fas fa-search"></i> Investigate</button>
+                    <button type="button" class="btn btn-danger ripple" onclick="takeAction('quarantine')"><i class="fas fa-ban"></i> Quarantine</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
+
+        // Dark Mode Toggle
+        document.getElementById('darkModeToggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            tooltipList.forEach(t => t.dispose());
+            tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
+        });
+
+        // Generate Particles
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 6 + 's';
+                particle.style.width = particle.style.height = Math.random() * 5 + 2 + 'px';
+                particlesContainer.appendChild(particle);
+            }
+        }
+        createParticles();
+
+        // Animated Counters
+        function animateCounters() {
+            const counters = document.querySelectorAll('.stat-counter[data-target]');
+            counters.forEach(counter => {
+                const target = +counter.getAttribute('data-target');
+                const increment = target / 100;
+                let current = 0;
+                const timer = setInterval(() => {
+                    current += increment;
+                    if (current >= target) {
+                        counter.textContent = target;
+                        clearInterval(timer);
+                    } else {
+                        counter.textContent = Math.ceil(current);
+                    }
+                }, 30);
+            });
+        }
+        animateCounters();
+
+        // Report Upload and Analysis Functions
+        const API_URL = 'http://localhost:8080/api/analyze-report';
+        const dashboardState = {
+            analyses: [],
+            stats: {
+                signed: 0,
+                unsigned: 0,
+                activeAlerts: 0,
+                avgResponseMs: 0
+            }
+        };
+        const dashboardCharts = {
+            binary: null,
+            trust: null,
+            history: null
+        };
+
+        function uploadReport() {
+            const fileInput = document.getElementById('reportFileInput');
+            const file = fileInput.files[0];
+            const uploadStatus = document.getElementById('uploadStatus');
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            if (!file) {
+                showStatus(uploadStatus, 'Please select a file', 'danger');
+                return;
+            }
+
+            if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+                showStatus(uploadStatus, 'Please select a valid JSON file', 'danger');
+                return;
+            }
+
+            // Show loading status
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            showStatus(uploadStatus, 'Uploading and analyzing report...', 'info');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            const requestStartedAt = performance.now();
+
+            // Send to backend with error handling
+            fetch(API_URL, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    // Don't set Content-Type header - browser will set it with boundary
+                }
+            })
+            .then(response => {
+                // Check if response is OK
+                if (!response.ok) {
+                    if (response.status === 0) {
+                        throw new Error('Cannot connect to backend. Make sure it\'s running on http://localhost:8082');
+                    }
+                    return response.text().then(text => {
+                        throw new Error(`Server returned ${response.status}: ${text || response.statusText}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Check if response contains an error
+                if (data.error) {
+                    throw new Error(data.message || 'Analysis failed');
+                }
+                const responseMs = performance.now() - requestStartedAt;
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Upload & Analyze';
+                showStatus(uploadStatus, 'Report analyzed successfully!', 'success');
+                updateDashboardFromAnalysis(data, responseMs);
+                displayAnalysisResults(data);
+            })
+            .catch(error => {
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Upload & Analyze';
+                console.error('Error:', error);
+                
+                // Provide helpful error messages
+                let errorMsg = error.message;
+                if (errorMsg.includes('Failed to fetch')) {
+                    errorMsg = 'Cannot connect to backend. Is it running on http://localhost:8080? Check the backend server logs.';
+                } else if (errorMsg.includes('CORS')) {
+                    errorMsg = 'CORS error. Backend may need to be restarted.';
+                }
+                
+                showStatus(uploadStatus, `Error: ${errorMsg}`, 'danger');
+            });
+        }
+
+        function isSignedBinary(data) {
+            if (data && data.digitallySigned === true) {
+                return true;
+            }
+
+            if (data && data.digital_signature && data.digital_signature.signed === true) {
+                return true;
+            }
+
+            const signers = data && data.analysis && data.analysis.static && data.analysis.static.pe
+                ? data.analysis.static.pe.digital_signers
+                : null;
+            if (Array.isArray(signers)) {
+                return signers.length > 0;
+            }
+            return Boolean(signers);
+        }
+
+        function getRiskBucket(trustScore) {
+            const score = Number(trustScore) || 0;
+            if (score <= 30) return 'high';
+            if (score <= 70) return 'medium';
+            return 'low';
+        }
+
+        function updateDashboardFromAnalysis(data, responseMs) {
+            // Reset dashboard to latest uploaded file so old alerts do not carry over.
+            dashboardState.analyses = [];
+
+            dashboardState.analyses.push({
+                timestamp: data.timestamp || new Date().toISOString(),
+                filename: data.filename || 'unknown',
+                riskLevel: String(data.riskLevel || 'low').toLowerCase(),
+                trustScore: Number(data.trustScore) || 0,
+                signed: isSignedBinary(data),
+                alerts: Array.isArray(data.alerts) ? data.alerts : [],
+                responseMs: Number(responseMs) || 0
+            });
+
+            const all = dashboardState.analyses;
+            const total = all.length;
+            const signedCount = all.filter(a => a.signed).length;
+            const unsignedCount = total - signedCount;
+            const activeAlerts = all.reduce((sum, a) => sum + a.alerts.length, 0);
+
+            dashboardState.stats.signed = signedCount;
+            dashboardState.stats.unsigned = unsignedCount;
+            dashboardState.stats.activeAlerts = activeAlerts;
+            dashboardState.stats.avgResponseMs = total > 0
+                ? all.reduce((sum, a) => sum + (Number(a.responseMs) || 0), 0) / total
+                : 0;
+
+            updateTopStats();
+            updateBinaryStatusChart();
+            updateTrustScoreChart();
+            updateHistoricalActivityChart();
+            updateRecentAlertsList();
+            updateSummaryAnalytics();
+        }
+
+        function updateTopStats() {
+            const signedEl = document.getElementById('signedCount');
+            const unsignedEl = document.getElementById('unsignedCount');
+            const avgEl = document.getElementById('avgResponseValue');
+            const alertsEl = document.getElementById('alertCount');
+
+            if (signedEl) signedEl.textContent = dashboardState.stats.signed;
+            if (unsignedEl) unsignedEl.textContent = dashboardState.stats.unsigned;
+            if (alertsEl) alertsEl.textContent = dashboardState.stats.activeAlerts;
+            if (avgEl) {
+                avgEl.textContent = `${dashboardState.stats.avgResponseMs.toFixed(1)}ms`;
+            }
+        }
+
+        function updateBinaryStatusChart() {
+            const signed = dashboardState.stats.signed;
+            const unsigned = dashboardState.stats.unsigned;
+            const total = Math.max(1, signed + unsigned);
+            const signedPct = ((signed / total) * 100).toFixed(1);
+            const unsignedPct = ((unsigned / total) * 100).toFixed(1);
+
+            const ctx = document.getElementById('binaryChart');
+            if (!ctx) return;
+
+            if (dashboardCharts.binary) {
+                dashboardCharts.binary.destroy();
+            }
+            dashboardCharts.binary = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Signed', 'Unsigned'],
+                    datasets: [{
+                        data: [signed, unsigned],
+                        backgroundColor: ['#2ecc71', '#e74c3c']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const textEl = ctx.closest('.card-body').querySelector('p');
+            if (textEl) {
+                textEl.textContent = `Signed: ${signedPct}% (${signed}) | Unsigned: ${unsignedPct}% (${unsigned})`;
+            }
+        }
+
+        function updateTrustScoreChart() {
+            const low = dashboardState.analyses.filter(a => getRiskBucket(a.trustScore) === 'low').length;
+            const high = dashboardState.analyses.length - low;
+            const total = Math.max(1, dashboardState.analyses.length);
+            const lowPct = ((low / total) * 100).toFixed(1);
+            const highPct = ((high / total) * 100).toFixed(1);
+
+            const ctx = document.getElementById('trustChart');
+            if (!ctx) return;
+
+            if (dashboardCharts.trust) {
+                dashboardCharts.trust.destroy();
+            }
+            dashboardCharts.trust = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Low Risk', 'High Risk'],
+                    datasets: [{
+                        label: 'Binaries',
+                        data: [low, high],
+                        backgroundColor: ['#27ae60', '#f39c12']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const textEl = ctx.closest('.card-body').querySelector('p');
+            if (textEl) {
+                textEl.textContent = `Low Risk: ${lowPct}% | High Risk: ${highPct}%`;
+            }
+        }
+
+        function updateHistoricalActivityChart() {
+            const ctx = document.getElementById('historyChart');
+            if (!ctx) return;
+
+            const last7 = dashboardState.analyses.slice(-7);
+            const labels = last7.map(a => new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            const values = last7.map(a => Number(a.trustScore) || 0);
+
+            if (dashboardCharts.history) {
+                dashboardCharts.history.destroy();
+            }
+            dashboardCharts.history = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Trust Score',
+                        data: values,
+                        borderColor: '#00d4ff',
+                        backgroundColor: 'rgba(0, 212, 255, 0.2)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+        }
+
+        function updateRecentAlertsList() {
+            const alertsList = document.getElementById('alertsList');
+            if (!alertsList) return;
+
+            const recent = dashboardState.analyses
+                .slice()
+                .reverse()
+                .flatMap(a => a.alerts.map(alert => ({
+                    filename: a.filename,
+                    timestamp: a.timestamp,
+                    severity: alert.severity || 'Low',
+                    message: alert.message || 'Alert detected'
+                })))
+                .slice(0, 10);
+
+            if (recent.length === 0) {
+                alertsList.innerHTML = '<div class="text-muted">No recent alerts.</div>';
+                return;
+            }
+
+            let html = '<div class="list-group">';
+            recent.forEach(a => {
+                const badge = getSeverityBadgeClass(a.severity);
+                html += '<div class="list-group-item bg-transparent border-secondary text-light">';
+                html += `<span class="badge ${badge} me-2">${a.severity}</span>`;
+                html += `<strong>${a.filename}</strong> - ${a.message}`;
+                html += `<div class="small text-muted mt-1">${new Date(a.timestamp).toLocaleString()}</div>`;
+                html += '</div>';
+            });
+            html += '</div>';
+            alertsList.innerHTML = html;
+        }
+
+        function updateSummaryAnalytics() {
+            const cardBodies = Array.from(document.querySelectorAll('.card .card-header'));
+            const summaryHeader = cardBodies.find(el => el.textContent.includes('Summary Analytics'));
+            if (!summaryHeader) return;
+
+            const summaryBody = summaryHeader.closest('.card').querySelector('.card-body');
+            if (!summaryBody) return;
+
+            const total = dashboardState.analyses.length;
+            const suspicious = dashboardState.analyses.filter(a => ['high', 'critical', 'medium'].includes(a.riskLevel)).length;
+            const verified = dashboardState.analyses.filter(a => a.signed).length;
+            const suspiciousPct = total > 0 ? ((suspicious / total) * 100).toFixed(1) : '0.0';
+            const verifiedPct = total > 0 ? ((verified / total) * 100).toFixed(1) : '0.0';
+            const meanResponse = dashboardState.stats.avgResponseMs.toFixed(1);
+
+            summaryBody.innerHTML = `
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item"><strong>Mean Response Time:</strong> ${meanResponse} ms</li>
+                    <li class="list-group-item"><strong>Suspicious Binaries:</strong> ${suspiciousPct}% (${suspicious}/${total})</li>
+                    <li class="list-group-item"><strong>Verified Binaries:</strong> ${verifiedPct}% (${verified}/${total})</li>
+                </ul>
+                <div class="mt-3">
+                    <button class="btn btn-outline-primary me-2 ripple" onclick="exportReport('CSV')" data-bs-toggle="tooltip" title="Download as CSV"><i class="fas fa-download"></i> Export CSV</button>
+                    <button class="btn btn-outline-success ripple" onclick="exportReport('PDF')" data-bs-toggle="tooltip" title="Download as PDF"><i class="fas fa-file-pdf"></i> Export PDF</button>
+                </div>
+            `;
+        }
+
+        function showStatus(element, message, type) {
+            element.textContent = message;
+            element.className = `alert alert-${type}`;
+            element.classList.remove('d-none');
+        }
+
+        function displayAnalysisResults(data) {
+            const resultsSection = document.getElementById('analysisResultsSection');
+            const resultsContent = document.getElementById('analysisResultsContent');
+
+            // Extract YARA matches from the raw analysis
+            let yaraMatches = [];
+            if (data.analysis && data.analysis.yara && data.analysis.yara.matches) {
+                yaraMatches = data.analysis.yara.matches;
+            } else if (data.analysis && data.analysis.yara && data.analysis.yara.rules) {
+                yaraMatches = Object.keys(data.analysis.yara.rules);
+            }
+
+            // Prepare data for chat function
+            const enrichedData = {
+                ...data,
+                yara_matches: yaraMatches,
+                signatures: data.analysis && data.analysis.signatures ? data.analysis.signatures : []
+            };
+
+            // Build HTML for results
+            let html = '<div class="row">';
+
+            // Summary metrics - Enhanced styling
+            html += '<div class="col-lg-6 mb-4">';
+            html += '<div style="background: linear-gradient(135deg, rgba(52, 152, 219, 0.2), rgba(41, 128, 185, 0.2)); border-left: 5px solid #3498db; padding: 20px; border-radius: 10px;">';
+            html += '<h6 class="font-weight-bold mb-3"><i class="fas fa-chart-bar text-primary"></i> Summary Metrics</h6>';
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
+            
+            // Filename
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">';
+            html += `<small style="color: #bbb;">File Name</small><br/>`;
+            html += `<strong style="font-size: 1.1rem; color: #3498db;">${data.filename || 'Unknown'}</strong>`;
+            html += '</div>';
+            
+            // Risk Level
+            const riskColor = data.riskLevel === 'CRITICAL' ? '#e74c3c' : data.riskLevel === 'HIGH' ? '#e67e22' : data.riskLevel === 'MEDIUM' ? '#f39c12' : '#27ae60';
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">';
+            html += `<small style="color: #bbb;">Risk Level</small><br/>`;
+            html += `<strong style="font-size: 1.1rem; color: ${riskColor};">${data.riskLevel || 'Unknown'}</strong>`;
+            html += '</div>';
+            
+            // Trust Score
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">';
+            html += `<small style="color: #bbb;">Trust Score</small><br/>`;
+            html += `<strong style="font-size: 1.1rem; color: ${data.trustScore > 70 ? '#27ae60' : data.trustScore > 40 ? '#f39c12' : '#e74c3c'};">${(data.trustScore || 0).toFixed(2)}/100</strong>`;
+            html += '</div>';
+            
+            // Binary ID
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">';
+            html += `<small style="color: #bbb;">Binary ID</small><br/>`;
+            html += `<code style="font-size: 0.75rem; color: #ecf0f1;">${(data.binaryId || 'N/A').substring(0, 16)}...</code>`;
+            html += '</div>';
+            
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            // File details - Enhanced styling
+            html += '<div class="col-lg-6 mb-4">';
+            html += '<div style="background: linear-gradient(135deg, rgba(46, 204, 113, 0.2), rgba(39, 174, 96, 0.2)); border-left: 5px solid #2ecc71; padding: 20px; border-radius: 10px;">';
+            html += '<h6 class="font-weight-bold mb-3"><i class="fas fa-file text-success"></i> File Details</h6>';
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">';
+            
+            // File Size
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">';
+            html += `<small style="color: #bbb;">File Size</small><br/>`;
+            html += `<strong style="color: #2ecc71;">${formatFileSize(data.fileSize || 0)}</strong>`;
+            html += '</div>';
+            
+            // Entropy
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">';
+            const entropyVal = (data.entropy || 0).toFixed(4);
+            const entropyColor = entropyVal > 7.0 ? '#e74c3c' : entropyVal > 6.5 ? '#f39c12' : '#27ae60';
+            html += `<small style="color: #bbb;">Entropy</small><br/>`;
+            html += `<strong style="color: ${entropyColor};">${entropyVal}</strong>`;
+            html += '</div>';
+            
+            // SHA-256
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; grid-column: 1 / -1;">';
+            html += `<small style="color: #bbb;">SHA-256</small><br/>`;
+            html += `<code style="font-size: 0.75rem; color: #ecf0f1; word-break: break-all;">${data.sha256 || 'N/A'}</code>`;
+            html += '</div>';
+            
+            // Timestamp
+            html += '<div style="padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; grid-column: 1 / -1;">';
+            html += `<small style="color: #bbb;">Analysis Time</small><br/>`;
+            html += `<strong style="color: #ecf0f1;">${new Date(data.timestamp).toLocaleString()}</strong>`;
+            html += '</div>';
+            
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Alerts if any
+            if (data.alerts && data.alerts.length > 0) {
+                html += '<div class="row mt-4">';
+                html += '<div class="col-12">';
+                html += '<div style="background: linear-gradient(135deg, rgba(231, 76, 60, 0.2), rgba(192, 57, 43, 0.2)); border-left: 5px solid #e74c3c; padding: 20px; border-radius: 10px;">';
+                html += '<h6 class="font-weight-bold mb-3"><i class="fas fa-exclamation-triangle text-danger"></i> Detected Issues & Alerts</h6>';
+                data.alerts.forEach(alert => {
+                    const alertColor = alert.severity === 'High' ? '#e74c3c' : alert.severity === 'Medium' ? '#f39c12' : '#3498db';
+                    html += `<div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: rgba(255,255,255,0.05); margin-bottom: 8px; border-radius: 5px; border-left: 3px solid ${alertColor};">`;
+                    html += `<span style="background: ${alertColor}; color: white; padding: 4px 8px; border-radius: 3px; font-size: 0.85rem; font-weight: bold;">${alert.severity}</span>`;
+                    html += `<span style="color: #ecf0f1; flex: 1;">${alert.message}</span>`;
+                    html += `</div>`;
+                });
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Analysis JSON
+            if (data.analysis) {
+                html += '<div class="row mt-4">';
+                html += '<div class="col-12">';
+                html += '<div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">';
+                html += '<h6 class="font-weight-bold mb-3"><i class="fas fa-code text-info"></i> Complete Analysis JSON</h6>';
+                html += '<div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 5px; overflow-x: auto; max-height: 400px; border-left: 3px solid #3498db;">';
+                html += '<pre style="margin: 0; color: #2ecc71; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; word-wrap: break-word;">';
+                html += JSON.stringify(data.analysis, null, 2).substring(0, 5000);
+                if (JSON.stringify(data.analysis).length > 5000) {
+                    html += '\n... [Truncated for display]';
+                }
+                html += '</pre>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            resultsContent.innerHTML = html;
+            resultsSection.style.display = 'block';
+
+            // Scroll to results section
+            setTimeout(() => {
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 300);
+
+            // Show chat section with the enriched analysis data
+            showChatSection(enrichedData);
+        }
+
+        function getRiskBadgeClass(risk) {
+            switch (risk.toLowerCase()) {
+                case 'critical':
+                    return 'bg-danger';
+                case 'high':
+                    return 'bg-warning text-dark';
+                case 'medium':
+                    return 'bg-info';
+                case 'low':
+                    return 'bg-success';
+                default:
+                    return 'bg-secondary';
+            }
+        }
+
+        function getSeverityBadgeClass(severity) {
+            switch (severity.toLowerCase()) {
+                case 'critical':
+                    return 'bg-danger';
+                case 'high':
+                    return 'bg-warning text-dark';
+                case 'medium':
+                    return 'bg-info';
+                case 'low':
+                    return 'bg-success';
+                default:
+                    return 'bg-secondary';
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Live Clock Update
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('liveClock').textContent = now.toLocaleTimeString();
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Backend Health Check
+        function checkBackendConnection() {
+            const statusEl = document.getElementById('backendStatus');
+            fetch('http://localhost:8080/api/health', {
+                method: 'GET',
+                mode: 'cors'
+            })
+            .then(response => {
+                if (response.ok) {
+                    statusEl.innerHTML = '<i class="fas fa-check-circle" style="color: green;"></i> Backend connected';
+                    return;
+                }
+                statusEl.innerHTML = '<i class="fas fa-exclamation-circle" style="color: orange;"></i> Backend unreachable';
+            })
+            .catch(error => {
+                statusEl.innerHTML = '<i class="fas fa-times-circle" style="color: red;"></i> Backend unavailable - Is it running on port 8082?';
+                console.warn('Backend connection check failed:', error);
+            });
+        }
+
+        // Check backend on page load
+        setTimeout(checkBackendConnection, 1000);
+
+        // ==================== CHAT FUNCTIONS ====================
+        let currentBinaryData = null;
+        let conversationId = 'conv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+        function showChatSection(analysisData) {
+            currentBinaryData = analysisData;
+            const chatSection = document.getElementById('chatSection');
+            chatSection.style.display = 'block';
+            
+            // Auto-scroll to chat section
+            setTimeout(() => {
+                chatSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 300);
+        }
+
+        function chatAsk() {
+            const input = document.getElementById('chatInput');
+            const question = input.value.trim();
+
+            if (!question) {
+                alert('Please type a question');
+                return;
+            }
+
+            // Use currentAnalysis from dashboard.js OR currentBinaryData from HTML
+            const analysisData = (typeof currentAnalysis !== 'undefined' && currentAnalysis) || currentBinaryData;
+            
+            if (!analysisData) {
+                alert('No analysis data available. Please upload a file first.');
+                return;
+            }
+
+            // Add user message to chat
+            addChatMessage(question, 'user');
+            input.value = '';
+
+            // Show loading indicator
+            addChatMessage('🤔 AI is analyzing...', 'ai-loading');
+
+            // Build analysis context - handle both dashboard.js currentAnalysis and HTML currentBinaryData
+            const analysisContext = {
+                filename: analysisData.filename || 'unknown',
+                entropy: analysisData.entropy || 0,
+                trustScore: analysisData.trustScore || 0.5,
+                alertCount: (analysisData.alertCount || analysisData.alerts) ? 
+                    (typeof analysisData.alertCount === 'number' ? analysisData.alertCount : (analysisData.alerts ? analysisData.alerts.length : 0)) : 0,
+                yaraMatches: analysisData.yaraMatches || (analysisData.yara_matches ? Object.keys(analysisData.yara_matches) : []),
+                signatures: analysisData.signatures || [],
+                fileHash: analysisData.fileHash || analysisData.file_hash || analysisData.sha256 || '',
+                riskScore: analysisData.riskScore || analysisData.mlRiskScore || 0
+            };
+
+            const chatRequest = {
+                question: question,
+                conversationId: conversationId,
+                analysisContext: analysisContext
+            };
+
+            console.log("Sending chat request:", chatRequest);
+
+            fetch('http://localhost:8080/api/chat/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(chatRequest)
+            })
+            .then(async response => {
+                const rawBody = await response.text();
+                let data = {};
+
+                if (rawBody) {
+                    try {
+                        data = JSON.parse(rawBody);
+                    } catch (parseError) {
+                        throw new Error(`Invalid response from chat service (HTTP ${response.status})`);
+                    }
+                }
+
+                if (!response.ok) {
+                    const errorMessage = extractFirstNonEmptyString([
+                        data.answer,
+                        data.message,
+                        data.error
+                    ]) || `Chat service error (HTTP ${response.status})`;
+                    throw new Error(errorMessage);
+                }
+
+                return normalizeChatResponse(data);
+            })
+            .then(data => {
+                // Remove loading message
+                removeLastMessage('ai-loading');
+
+                // Add AI response with formatting
+                const severity = data.severity || 'UNKNOWN';
+                const confidence = ((data.confidence || 0) * 100).toFixed(0);
+                
+                let responseWithMetadata = (data.answer || 'No response from AI') + '\n\n' +
+                    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+                    `📊 Severity: ${severity} | 🎯 Confidence: ${confidence}%`;
+
+                if (data.suspicious) {
+                    responseWithMetadata += ' | ⚠️ SUSPICIOUS';
+                }
+
+                addChatMessage(responseWithMetadata, 'ai');
+            })
+            .catch(error => {
+                removeLastMessage('ai-loading');
+                console.error('Chat error:', error);
+                const reason = (error && error.message) ? error.message : 'Could not connect to AI service.';
+                addChatMessage(reason, 'ai-error');
+            });
+        }
+
+        function quickQuestion(question) {
+            document.getElementById('chatInput').value = question;
+            chatAsk();
+        }
+
+        function extractFirstNonEmptyString(values) {
+            for (const value of values) {
+                if (typeof value === 'string' && value.trim() !== '') {
+                    return value;
+                }
+            }
+            return '';
+        }
+
+        function normalizeChatResponse(payload) {
+            const source = (payload && typeof payload === 'object' && (payload.data || payload.result))
+                ? (payload.data || payload.result)
+                : payload;
+
+            const answer = extractFirstNonEmptyString([
+                source && source.answer,
+                source && source.response,
+                source && source.message,
+                source && source.text
+            ]);
+
+            return {
+                answer: answer || 'No response from AI',
+                severity: extractFirstNonEmptyString([source && source.severity]).toUpperCase() || 'UNKNOWN',
+                confidence: Number(source && source.confidence) || 0,
+                suspicious: Boolean(source && source.suspicious)
+            };
+        }
+
+        function addChatMessage(message, type) {
+            const chatMessages = document.getElementById('chatMessages');
+            
+            // Remove placeholder if exists
+            const placeholder = chatMessages.querySelector('div:not(.chat-message)');
+            if (placeholder && placeholder.textContent === 'Chat messages will appear here...') {
+                placeholder.remove();
+            }
+
+            const messageEl = document.createElement('div');
+            messageEl.className = 'chat-message chat-' + type;
+
+            if (type === 'user') {
+                messageEl.style.cssText = 'margin: 10px 0; padding: 10px 15px; background: rgba(52, 152, 219, 0.3); border-left: 3px solid #3498db; border-radius: 5px; text-align: right; color: #ecf0f1;';
+                messageEl.innerHTML = '<strong>You:</strong> ' + escapeHtml(message);
+            } else if (type === 'ai') {
+                messageEl.style.cssText = 'margin: 10px 0; padding: 10px 15px; background: rgba(46, 204, 113, 0.2); border-left: 3px solid #2ecc71; border-radius: 5px; color: #ecf0f1; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.9rem;';
+                messageEl.innerHTML = '<strong>🤖 AI:</strong>\n' + escapeHtml(message);
+            } else if (type === 'ai-loading') {
+                messageEl.style.cssText = 'margin: 10px 0; padding: 10px 15px; background: rgba(241, 196, 15, 0.2); border-left: 3px solid #f1c40f; border-radius: 5px; color: #f1c40f;';
+                messageEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + message;
+            } else if (type === 'ai-error') {
+                messageEl.style.cssText = 'margin: 10px 0; padding: 10px 15px; background: rgba(231, 76, 60, 0.2); border-left: 3px solid #e74c3c; border-radius: 5px; color: #e74c3c;';
+                messageEl.innerHTML = '<strong>⚠️ Error:</strong> ' + escapeHtml(message);
+            }
+
+            chatMessages.appendChild(messageEl);
+            
+            // Auto-scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function removeLastMessage(type) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messages = chatMessages.querySelectorAll('.chat-' + type);
+            if (messages.length > 0) {
+                messages[messages.length - 1].remove();
+            }
+        }
+
+        function clearChatMessages() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '<div style="color: #ccc; font-size: 0.9rem;">Chat messages cleared. Ask a question to continue...</div>';
+            conversationId = 'conv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+        // ==================== END CHAT FUNCTIONS ====================
+    </script>
+</body>
+</html>
